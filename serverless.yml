@@ -1,0 +1,63 @@
+org: dnagarpowers
+app: social-media-backend
+service: social-media-backend
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: python3.9
+  iamRoleStatements:
+    - Effect: "Allow"
+      Action:
+        - "dynamodb:GetItem"
+      Resource: !GetAtt usersTable.Arn
+    
+    - Effect: "Allow"
+      Action:
+        - "secretsmanager:GetSecretValue"
+      Resource: !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:authSecrets-FPE1gD
+  
+  httpApi:
+    authorizers:
+      customAuthorizer:
+        type: request
+        functionName: authorizerFunc
+
+functions:
+  login:
+    handler: login.handler
+    events:
+      - httpApi:
+          path: /login
+          method: post
+  hello:
+    handler: posts.index
+    events:
+      - httpApi:
+          path: /
+          method: get
+          authorizer: 
+            name: customAuthorizer
+  
+  authorizerFunc:
+    handler: authorizer.lambda_handler
+
+
+plugins:
+  - serverless-python-requirements
+
+resources: # CloudFormation template syntax from here on.
+  Resources:
+    usersTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: usersTable
+        AttributeDefinitions:
+          - AttributeName: username
+            AttributeType: S
+        KeySchema:
+          - AttributeName: username
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
