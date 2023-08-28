@@ -34,7 +34,7 @@ functions:
     handler: handlers.posts.index
     events:
       - httpApi:
-          path: /
+          path: /posts
           method: get
           authorizer: 
             name: customAuthorizer
@@ -43,7 +43,7 @@ functions:
     handler: handlers.posts.create
     events:
       - httpApi:
-          path: /
+          path: /posts
           method: post
           authorizer: 
             name: customAuthorizer
@@ -52,7 +52,7 @@ functions:
     handler: handlers.posts.edit
     events:
       - httpApi:
-          path: /{id}
+          path: /posts/{id}
           method: put
           authorizer: 
             name: customAuthorizer
@@ -61,7 +61,7 @@ functions:
     handler: handlers.posts.get
     events:
       - httpApi:
-          path: /{id}
+          path: /posts/{id}
           method: get
           authorizer: 
             name: customAuthorizer
@@ -70,8 +70,35 @@ functions:
     handler: handlers.posts.delete
     events:
       - httpApi:
-          path: /{id}
+          path: /posts/{id}
           method: delete
+          authorizer: 
+            name: customAuthorizer
+
+  postsLike:
+    handler: handlers.posts.like
+    events:
+      - httpApi:
+          path: posts/{id}/like
+          method: post
+          authorizer: 
+            name: customAuthorizer
+    
+  postsUnlike:
+    handler: handlers.posts.unlike
+    events:
+      - httpApi:
+          path: posts/{id}/unlike
+          method: post
+          authorizer: 
+            name: customAuthorizer
+  
+  postsComment:
+    handler: handlers.posts.comment
+    events:
+      - httpApi:
+          path: posts/{id}/comment
+          method: post
           authorizer: 
             name: customAuthorizer
 
@@ -99,7 +126,24 @@ functions:
           method: put
           authorizer: 
             name: customAuthorizer
+
+  follow:
+    handler: handlers.users.follow
+    events:
+      - httpApi:
+          path: /follow/{username}
+          method: post
+          authorizer: 
+            name: customAuthorizer
   
+  unfollow:
+    handler: handlers.users.unfollow
+    events:
+      - httpApi:
+          path: /unfollow/{username}
+          method: post
+          authorizer: 
+            name: customAuthorizer
 
   
   authorizerFunc:

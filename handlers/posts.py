@@ -48,3 +48,16 @@ def edit(event, context):
 def delete(event, context):
     asyncio.run(utils.setup())
     return {"statusCode": 200, "body": "Hello, World!"}
+
+def like(event, context):
+    asyncio.run(utils.setup())
+    return {"statusCode": 200, "body": "Hello, World!"}
+
+def unlike(event, context):
+    asyncio.run(utils.setup())
+    return {"statusCode": 200, "body": "Hello, World!"}
+
+def comment(event, context):
+    asyncio.run(utils.setup())
+    return {"statusCode": 200, "body": "Hello, World!"}
+
