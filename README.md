@@ -1,101 +1,72 @@
-<!--
-title: 'AWS Simple HTTP Endpoint example in Python'
-description: 'This template demonstrates how to make a simple HTTP API with Python running on AWS Lambda and API Gateway using the Serverless Framework.'
-layout: Doc
-framework: v3
-platform: AWS
-language: python
-authorLink: 'https://github.com/serverless'
-authorName: 'Serverless, inc.'
-authorAvatar: 'https://avatars1.githubusercontent.com/u/13742415?s=200&v=4'
--->
+# Social Media Backend
 
-# Serverless Framework Python HTTP API on AWS
+## Overview
 
-This template demonstrates how to make a simple HTTP API with Python running on AWS Lambda and API Gateway using the Serverless Framework.
+This is the backend of a social media platform built using AWS Lambda, API Gateway, the Serverless Framework, Python, MongoDB, and Neo4j. It provides the foundation for creating, reading, updating, and deleting posts, managing user profiles, and handling relationships between users.
 
-This template does not include any kind of persistence (database). For more advanced examples, check out the [serverless/examples repository](https://github.com/serverless/examples/)  which includes DynamoDB, Mongo, Fauna and other examples.
+## Features
 
-## Usage
+- **User Management**: Manage user accounts, including registration, login, and profile updates.
 
-### Deployment
+- **Post Management**: Create, retrieve, update, and delete posts. Posts can include text, images, and other content.
 
-```
-$ serverless deploy
-```
+- **Follow and Unfollow**: Users can follow and unfollow other users to see their posts in their feed.
 
-After deploying, you should see output similar to:
+- **News Feed**: Users have a personalized news feed that shows posts from users they follow.
 
-```bash
-Deploying aws-python-http-api-project to stage dev (us-east-1)
+## Technologies Used
 
-✔ Service deployed to stack aws-python-http-api-project-dev (140s)
+- **AWS Lambda**: For serverless execution of functions.
 
-endpoint: GET - https://xxxxxxxxxx.execute-api.us-east-1.amazonaws.com/
-functions:
-  hello: aws-python-http-api-project-dev-hello (2.3 kB)
-```
+- **API Gateway**: To create HTTP endpoints.
 
-_Note_: In current form, after deployment, your API is public and can be invoked by anyone. For production deployments, you might want to configure an authorizer. For details on how to do that, refer to [http event docs](https://www.serverless.com/framework/docs/providers/aws/events/apigateway/).
+- **Serverless Framework**: For deploying and managing serverless applications.
 
-### Invocation
+- **Python**: The primary programming language.
 
-After successful deployment, you can call the created application via HTTP:
+- **MongoDB**: A NoSQL database for storing user profiles and posts.
 
-```bash
-curl https://xxxxxxx.execute-api.us-east-1.amazonaws.com/
-```
+- **Neo4j**: A graph database for managing user relationships and social connections.
 
-Which should result in response similar to the following (removed `input` content for brevity):
+## Setup
 
-```json
-{
-  "message": "Go Serverless v3.0! Your function executed successfully!",
-  "input": {
-    ...
-  }
-}
-```
+1. **Install Dependencies**:
+   - Install Serverless Framework: `npm install -g serverless`
+   - Install Python packages: `pipenv install`
 
-### Local development
+2. **Configure AWS Credentials**:
+   - Configure AWS credentials with `aws configure` if not already set up.
 
-You can invoke your function locally by using the following command:
+3. **Database Configuration**:
+   - Set up your MongoDB and Neo4j databases and provide connection details in the configuration files.
 
-```bash
-serverless invoke local --function hello
-```
+4. **Deploy the Backend**:
+   - Run `make deploy` to deploy your Lambda functions and API Gateway.
 
-Which should result in response similar to the following:
+## Endpoints
 
-```
-{
-  "statusCode": 200,
-  "body": "{\n  \"message\": \"Go Serverless v3.0! Your function executed successfully!\",\n  \"input\": \"\"\n}"
-}
-```
+Here are some of the main endpoints provided by the API:
 
-Alternatively, it is also possible to emulate API Gateway and Lambda locally by using `serverless-offline` plugin. In order to do that, execute the following command:
+- `POST /register`: Register a new user.
+- `POST /login`: Log in an existing user.
+- `GET /users/{user_id}`: Get user profile by ID.
+- `PUT /users/{user_id}`: Update user profile.
+- `POST /posts`: Read news feed
+- `POST /posts`: Create a new post.
+- `GET /posts/{post_id}`: Get a post by ID.
+- `PUT /posts/{post_id}`: Update a post.
+- `DELETE /posts/{post_id}`: Delete a post.
+- `POST /follow/{user_id}`: Follow a user.
+- `POST /unfollow/{user_id}`: Unfollow a user.
 
-```bash
-serverless plugin install -n serverless-offline
-```
+## Testing
 
-It will add the `serverless-offline` plugin to `devDependencies` in `package.json` file as well as will add it to `plugins` in `serverless.yml`.
+You can test the API using tools like `curl`, Postman, or any HTTP client. The API documentation provides detailed information about the available endpoints and their usage.
 
-After installation, you can start local emulation with:
+## License
 
-```
-serverless offline
-```
+This project is licensed under the [MIT License](LICENSE).
 
-To learn more about the capabilities of `serverless-offline`, please refer to its [GitHub repository](https://github.com/dherault/serverless-offline).
+## Acknowledgments
 
-### Bundling dependencies
-
-In case you would like to include 3rd party dependencies, you will need to use a plugin called `serverless-python-requirements`. You can set it up by running the following command:
-
-```bash
-serverless plugin install -n serverless-python-requirements
-```
-
-Running the above will automatically add `serverless-python-requirements` to `plugins` section in your `serverless.yml` file and add it as a `devDependency` to `package.json` file. The `package.json` file will be automatically created if it doesn't exist beforehand. Now you will be able to add your dependencies to `requirements.txt` file (`Pipfile` and `pyproject.toml` is also supported but requires additional configuration) and they will be automatically injected to Lambda package during build process. For more details about the plugin's configuration, please refer to [official documentation](https://github.com/UnitedIncome/serverless-python-requirements).
+- Special thanks to the Serverless Framework, MongoDB, and Neo4j communities for their fantastic tools and documentation.
