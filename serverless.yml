@@ -9,8 +9,8 @@ provider:
   iamRoleStatements:
     - Effect: "Allow"
       Action:
-        - "dynamodb:GetItem"
-      Resource: !GetAtt usersTable.Arn
+        - "ssm:GetParameter"
+      Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:*
     
     - Effect: "Allow"
       Action:
@@ -25,13 +25,13 @@ provider:
 
 functions:
   login:
-    handler: login.handler
+    handler: handlers.login.handler
     events:
       - httpApi:
           path: /login
           method: post
-  hello:
-    handler: posts.index
+  posts:
+    handler: handlers.posts.index
     events:
       - httpApi:
           path: /
@@ -39,25 +39,72 @@ functions:
           authorizer: 
             name: customAuthorizer
   
+  postsCreate:
+    handler: handlers.posts.create
+    events:
+      - httpApi:
+          path: /
+          method: post
+          authorizer: 
+            name: customAuthorizer
+  
+  postsEdit:
+    handler: handlers.posts.edit
+    events:
+      - httpApi:
+          path: /{id}
+          method: put
+          authorizer: 
+            name: customAuthorizer
+
+  postsShow:
+    handler: handlers.posts.get
+    events:
+      - httpApi:
+          path: /{id}
+          method: get
+          authorizer: 
+            name: customAuthorizer
+  
+  postsDelete:
+    handler: handlers.posts.delete
+    events:
+      - httpApi:
+          path: /{id}
+          method: delete
+          authorizer: 
+            name: customAuthorizer
+
+  usersCreate:
+    handler: handlers.users.create
+    events:
+      - httpApi:
+          path: /users
+          method: post
+  
+  usersShow:
+    handler: handlers.users.show
+    events:
+      - httpApi:
+          path: /users/{username}
+          method: get
+          authorizer: 
+            name: customAuthorizer
+  
+  usersEdit:
+    handler: handlers.users.edit
+    events:
+      - httpApi:
+          path: /users/{username}
+          method: put
+          authorizer: 
+            name: customAuthorizer
+  
+
+  
   authorizerFunc:
     handler: authorizer.lambda_handler
 
 
 plugins:
   - serverless-python-requirements
-
-resources: # CloudFormation template syntax from here on.
-  Resources:
-    usersTable:
-      Type: AWS::DynamoDB::Table
-      Properties:
-        TableName: usersTable
-        AttributeDefinitions:
-          - AttributeName: username
-            AttributeType: S
-        KeySchema:
-          - AttributeName: username
-            KeyType: HASH
-        ProvisionedThroughput:
-          ReadCapacityUnits: 1
-          WriteCapacityUnits: 1

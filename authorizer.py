@@ -1,13 +1,14 @@
+import asyncio
 import re
 
-import boto3
 import jwt
-from services.dynamodb import Users
+
+import utils
+from models.users import UserDocument, find_user
 from services.secrets import get_secret
 
 
 def lambda_handler(event, context):
-
     '''
     Validate the incoming token and produce the principal user identifier
     associated with the token. This can be accomplished in a number of ways:
@@ -17,7 +18,6 @@ def lambda_handler(event, context):
     3. Lookup in a self-managed DB
     '''
     principalId = 'user|a1b2c3d4'
-
     '''
     You can send a 401 Unauthorized response to the client by failing like so:
 
@@ -41,7 +41,7 @@ def lambda_handler(event, context):
     tmp = event['routeArn'].split(':')
     apiGatewayArnTmp = tmp[5].split('/')
     awsAccountId = tmp[4]
-    
+
     print(f"{awsAccountId=}")
 
     policy = AuthPolicy(principalId, awsAccountId)
@@ -50,27 +50,30 @@ def lambda_handler(event, context):
     policy.stage = apiGatewayArnTmp[1]
 
     if 'authorization-token' not in event['headers']:
-      policy.denyAllMethods()
-      authResponse = policy.build()
-      return authResponse
+        policy.denyAllMethods()
+        authResponse = policy.build()
+        return authResponse
 
     print("Client token: " + event['headers']['authorization-token'])
     print("Method ARN: " + event['routeArn'])
-    
+
     token = event['headers']['authorization-token']
     try:
-      payload = jwt.decode(token, key=get_secret(), algorithms=['HS256', ])
+        payload = jwt.decode(token, key=get_secret(), algorithms=[
+            'HS256',
+        ])
     except (jwt.exceptions.DecodeError, jwt.exceptions.ExpiredSignatureError):
-      policy.denyAllMethods()
-      authResponse = policy.build()
-      return authResponse
-    
-    table = boto3.resource('dynamodb').Table("usersTable")
-    users = Users(table)
+        policy.denyAllMethods()
+        authResponse = policy.build()
+        return authResponse
 
-    found_user = users.get_user(username=payload["username"])
+    async def get_user(username: str) -> UserDocument:
+        await utils.setup()
+        return await find_user(username)
 
-    if payload["username"] == found_user["username"]:
+    found_user = asyncio.run(get_user(payload["username"]))
+
+    if payload["username"] == found_user.username:
         policy.allowAllMethods()
     else:
         policy.denyAllMethods()
@@ -102,7 +105,6 @@ class AuthPolicy(object):
     version = '2012-10-17'
     # The regular expression used to validate resource paths for the policy
     pathRegex = '^[/.a-zA-Z0-9-\*]+$'
-
     '''Internal lists of allowed and denied methods.
 
     These are lists of objects and each object has 2 properties: A resource
@@ -111,17 +113,14 @@ class AuthPolicy(object):
     '''
     allowMethods = []
     denyMethods = []
-
     """Replace the placeholder value with a default API Gateway API id to be used in the policy.
     Beware of using '*' since it will not simply mean any API Gateway API id, because stars will greedily expand over '/' or other separators.
     See https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements_resource.html for more details."""
     restApiId = "<<restApiId>>"
-
     """Replace the placeholder value with a default region to be used in the policy.
     Beware of using '*' since it will not simply mean any region, because stars will greedily expand over '/' or other separators.
     See https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements_resource.html for more details."""
     region = "<<region>>"
-
     """Replace the placeholder value with a default stage to be used in the policy.
     Beware of using '*' since it will not simply mean any stage, because stars will greedily expand over '/' or other separators.
     See https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements_resource.html for more details."""
@@ -138,15 +137,19 @@ class AuthPolicy(object):
         the internal list contains a resource ARN and a condition statement. The condition
         statement can be null.'''
         if verb != '*' and not hasattr(HttpVerb, verb):
-            raise NameError('Invalid HTTP verb ' + verb + '. Allowed verbs in HttpVerb class')
+            raise NameError('Invalid HTTP verb ' + verb +
+                            '. Allowed verbs in HttpVerb class')
         resourcePattern = re.compile(self.pathRegex)
         if not resourcePattern.match(resource):
-            raise NameError('Invalid resource path: ' + resource + '. Path should match ' + self.pathRegex)
+            raise NameError('Invalid resource path: ' + resource +
+                            '. Path should match ' + self.pathRegex)
 
         if resource[:1] == '/':
             resource = resource[1:]
 
-        resourceArn = 'arn:aws:execute-api:{}:{}:{}/{}/{}/{}'.format(self.region, self.awsAccountId, self.restApiId, self.stage, verb, resource)
+        resourceArn = 'arn:aws:execute-api:{}:{}:{}/{}/{}/{}'.format(
+            self.region, self.awsAccountId, self.restApiId, self.stage, verb,
+            resource)
 
         if effect.lower() == 'allow':
             self.allowMethods.append({
@@ -179,11 +182,13 @@ class AuthPolicy(object):
             statement = self._getEmptyStatement(effect)
 
             for curMethod in methods:
-                if curMethod['conditions'] is None or len(curMethod['conditions']) == 0:
+                if curMethod['conditions'] is None or len(
+                        curMethod['conditions']) == 0:
                     statement['Resource'].append(curMethod['resourceArn'])
                 else:
                     conditionalStatement = self._getEmptyStatement(effect)
-                    conditionalStatement['Resource'].append(curMethod['resourceArn'])
+                    conditionalStatement['Resource'].append(
+                        curMethod['resourceArn'])
                     conditionalStatement['Condition'] = curMethod['conditions']
                     statements.append(conditionalStatement)
 
@@ -228,7 +233,7 @@ class AuthPolicy(object):
         one statement for Allow and one statement for Deny.
         Methods that includes conditions will have their own statement in the policy.'''
         if ((self.allowMethods is None or len(self.allowMethods) == 0) and
-                (self.denyMethods is None or len(self.denyMethods) == 0)):
+            (self.denyMethods is None or len(self.denyMethods) == 0)):
             raise NameError('No statements defined for the policy')
 
         policy = {
@@ -239,7 +244,9 @@ class AuthPolicy(object):
             }
         }
 
-        policy['policyDocument']['Statement'].extend(self._getStatementForEffect('Allow', self.allowMethods))
-        policy['policyDocument']['Statement'].extend(self._getStatementForEffect('Deny', self.denyMethods))
+        policy['policyDocument']['Statement'].extend(
+            self._getStatementForEffect('Allow', self.allowMethods))
+        policy['policyDocument']['Statement'].extend(
+            self._getStatementForEffect('Deny', self.denyMethods))
 
         return policy
