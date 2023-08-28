@@ -21,7 +21,7 @@ class UserIn(pydantic.BaseModel):
 
 
 class User(pydantic.BaseModel):
-    username: Indexed(str, unique=True)
+    username: str
     password: SecretStr
     scopes: list[str] = []
     avatar: Optional[str] = ""
@@ -32,12 +32,13 @@ class User(pydantic.BaseModel):
             return v
         # Define a regular expression pattern to match URLs
         url_pattern = r'^https?://(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,6}(?:/[^/]*)*(?:\.(?:jpg|jpeg|png|gif))$'
-        if "s3.amazonaws.com" not in v or not re.match(url_pattern, v):
+        if "s3.amazonaws.com" not in v and not re.match(url_pattern, v):
             raise ValueError(f"Avatar must be a url. Received: {v}")
         return v
 
 
 class UserDocument(User, BaseDocument):
+    username: Indexed(str, unique=True)
     password: str
 
     class Settings:

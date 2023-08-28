@@ -12,6 +12,11 @@ from services.secrets import get_secret
 
 
 def handler(event, context):
+    """
+    This is the handler for the login endpoint. It is responsible for
+    authenticating a user and returning a JWT token that can be used to
+    authenticate future requests.
+    """
 
     async def _login(event):
         try:

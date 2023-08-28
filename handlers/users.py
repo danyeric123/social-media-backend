@@ -8,6 +8,9 @@ from models.users import User, UserDocument, create_new_user
 
 
 def create(event, context):
+    """
+    Create a new user upon registration
+    """
 
     async def _create(event):
         await utils.setup()  # initialize connections to databases
@@ -48,5 +51,15 @@ def edit(event, context):
 
 
 def show(event, context):
+    asyncio.run(utils.setup())
+    return {"statusCode": 200, "body": "Hello, World!"}
+
+
+def follow(event, context):
+    asyncio.run(utils.setup())
+    return {"statusCode": 200, "body": "Hello, World!"}
+
+
+def unfollow(event, context):
     asyncio.run(utils.setup())
     return {"statusCode": 200, "body": "Hello, World!"}
