@@ -108,6 +108,15 @@ functions:
       - httpApi:
           path: /users
           method: post
+
+  usersList:
+    handler: handlers.users.index
+    events:
+      - httpApi:
+          path: /users
+          method: get
+          authorizer: 
+            name: customAuthorizer
   
   usersShow:
     handler: handlers.users.show

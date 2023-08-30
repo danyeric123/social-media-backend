@@ -35,5 +35,5 @@ class PostDocument(BaseDocument, Post):
         indexes = [("title",), ("user",)]
 
 
-async def get_recent_posts(friends: list[str] = []):
-    return await PostDocument.find(In(PostDocument.author, friends)).to_list()
+async def get_recent_posts(following: list[str] = []):
+    return await PostDocument.find(In(PostDocument.author, following)).to_list()
