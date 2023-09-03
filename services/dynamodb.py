@@ -1,8 +1,9 @@
-import logging
-
 import boto3
+import botocore
 
-logger = logging.getLogger(__name__)
+from utils.logging import LOG_MANAGER
+
+logger = LOG_MANAGER.getLogger(__name__)
 
 
 class FollwersTable:
@@ -21,15 +22,18 @@ class FollwersTable:
         :param user: user.
         """
         try:
-            response = self.table.get_item(Key={'username': username})
+            response = self.table.get_item(Key={"username": username})
         except botocore.exceptions.ClientError as err:
             logger.error(
                 "Couldn't get user %s from table %s. Here's why: %s: %s",
-                username, self.table.name, err.response['Error']['Code'],
-                err.response['Error']['Message'])
+                username,
+                self.table.name,
+                err.response["Error"]["Code"],
+                err.response["Error"]["Message"],
+            )
             raise
         else:
-            return response['Item']
+            return response["Item"]
 
     def get_user(self, username: str):
         """
@@ -38,12 +42,15 @@ class FollwersTable:
         :param user: user.
         """
         try:
-            response = self.table.get_item(Key={'username': username})
+            response = self.table.get_item(Key={"username": username})
         except botocore.exceptions.ClientError as err:
             logger.error(
                 "Couldn't get user %s from table %s. Here's why: %s: %s",
-                username, self.table.name, err.response['Error']['Code'],
-                err.response['Error']['Message'])
+                username,
+                self.table.name,
+                err.response["Error"]["Code"],
+                err.response["Error"]["Message"],
+            )
             raise
         else:
-            return response['Item']
+            return response["Item"]

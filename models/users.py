@@ -51,13 +51,14 @@ class UserDocument(User, BaseDocument):
 
 
 async def get_followers(follower_ids: list[str]):
-    followers = await UserDocument.find(In(UserDocument.id, follower_ids),
+    followers = await UserDocument.find(In(UserDocument.username, follower_ids),
                                         limit=100).to_list()
     return followers
 
 
 async def get_following(following_ids: list[str]):
-    following = await UserDocument.find(In(UserDocument.id, following_ids),
+    following = await UserDocument.find(In(UserDocument.username,
+                                           following_ids),
                                         limit=100).to_list()
     return following
 

@@ -7,13 +7,9 @@ import pydantic
 import utils
 from models.posts import Post, PostDocument, Reply, get_recent_posts
 from models.users import UserDocument
-from services.secrets import get_secret
+from utils.logging import LOG_MANAGER
 
-
-def get_current_user(event):
-    header = event["headers"]["authorization-token"]
-    payload = jwt.decode(header, get_secret(), algorithms=["HS256"])
-    return payload["username"]
+logger = LOG_MANAGER.getLogger(__name__)
 
 
 def index(event, context):
@@ -22,7 +18,7 @@ def index(event, context):
     """
 
     try:
-        username = get_current_user(event)
+        username = utils.get_current_user(event, context)
     except KeyError:
         return {"statusCode": 403, "body": "Unauthorized: No token was passed"}
     except jwt.exceptions.InvalidSignatureError:
@@ -38,7 +34,7 @@ def index(event, context):
         posts = get_recent_posts(user.following)
         return {
             "statusCode": 200,
-            "body": [Post(**post.dict()).json() for post in posts]
+            "body": [Post(**post.dict()).json() for post in posts],
         }
 
     return asyncio.run(_index(username))
@@ -50,7 +46,7 @@ def create(event, context):
     """
 
     try:
-        username = get_current_user(event)
+        username = utils.get_current_user(event, context)
     except KeyError:
         return {"statusCode": 403, "body": "Unauthorized: No token was passed"}
     except jwt.exceptions.InvalidSignatureError:
@@ -90,7 +86,7 @@ def get(event, context):
                     400,
                 "body":
                     json.dumps(
-                        {"message": "Path parameter 'id' was not passed"})
+                        {"message": "Path parameter 'id' was not passed"}),
             }
 
         if not post:
@@ -115,7 +111,7 @@ def like(event, context):
 
     async def _like(event):
         try:
-            username = get_current_user(event)
+            username = utils.get_current_user(event, context)
         except KeyError:
             return {
                 "statusCode": 403,
@@ -146,7 +142,7 @@ def unlike(event, context):
 
     async def _unlike(event):
         try:
-            username = get_current_user(event)
+            username = utils.get_current_user(event, context)
         except KeyError:
             return {
                 "statusCode": 403,
@@ -177,7 +173,7 @@ def comment(event, context):
 
     async def _comment(event):
         try:
-            username = get_current_user(event)
+            username = utils.get_current_user(event, context)
         except KeyError:
             return {
                 "statusCode": 403,
@@ -199,7 +195,7 @@ def comment(event, context):
         except KeyError:
             return {"statusCode": 400, "body": "No body was passed"}
 
-        post.comments.append(reply)
+        post.replies.append(reply)
         await post.save()
         return {"statusCode": 200}
 

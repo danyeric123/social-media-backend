@@ -7,13 +7,17 @@ from pydantic.env_settings import SettingsSourceCallable
 
 ssm_client = boto3.client("ssm", region_name="us-east-1")
 
+from utils.logging import LOG_MANAGER
+
+logger = LOG_MANAGER.getLogger(__name__)
+
 
 class SecretManagerConfig:
 
     @classmethod
     def _get_secret(cls, secret_name: str) -> Union[str, dict[str, Any]]:
         secret_name = f"/social-media-backend/{secret_name}"
-        print(f"Getting secret {secret_name}")
+        logger.info(f"Getting secret {secret_name}")
         secret_string = ssm_client.get_parameter(
             Name=secret_name, WithDecryption=True)["Parameter"]["Value"]
         try:

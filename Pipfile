@@ -11,6 +11,7 @@ beanie = "*"
 neomodel = "*"
 python-decouple = "*"
 neo4j-driver = "*"
+newrelic = "*"
 
 [dev-packages]
 flake8 = "*"

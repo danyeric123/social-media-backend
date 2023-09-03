@@ -1,5 +1,3 @@
-org: dnagarpowers
-app: social-media-backend
 service: social-media-backend
 frameworkVersion: '3'
 
@@ -157,7 +155,6 @@ functions:
   
   authorizerFunc:
     handler: authorizer.lambda_handler
-
 
 plugins:
   - serverless-python-requirements
