@@ -1,23 +1,35 @@
 from datetime import datetime
 
 from beanie.operators import In
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
+from ulid import ULID
 
 from models import BaseDocument
-
-from .users import User
+from models.users import UserDocument
 
 
 class Reply(BaseModel):
-    user: str
+    ulid: str
+    author: str
     content: str
     created_at: datetime = datetime.now()
     updated_at: datetime = datetime.now()
     likes: list[str] = []
     replies: list["Reply"] = []
 
+    @validator("ulid")
+    def ulid_must_be_valid(cls, v):
+        if isinstance(v, str):
+            try:
+                ULID.from_str(v)
+                return v
+            except ValueError:
+                raise ValueError("ULID must be a valid ULID string")
+        raise ValueError("ULID must be a string or a ULID object")
+
 
 class Post(BaseModel):
+    ulid: str
     title: str
     author: str
     content: str
@@ -27,13 +39,30 @@ class Post(BaseModel):
     created_at: datetime = datetime.now()
     updated_at: datetime = datetime.now()
 
+    @validator("ulid")
+    def ulid_must_be_valid(cls, v):
+        if isinstance(v, str):
+            try:
+                ULID.from_str(v)
+                return v
+            except ValueError:
+                raise ValueError("ULID must be a valid ULID string")
+        raise ValueError("ULID must be a string or a ULID object")
+
 
 class PostDocument(BaseDocument, Post):
 
     class Settings:
         name = "posts"
-        indexes = [("title",), ("user",)]
+        indexes = [("title",), ("user",), ("ulid",)]
 
 
-async def get_recent_posts(following: list[str] = []):
-    return await PostDocument.find(In(PostDocument.author, following)).to_list()
+async def get_recent_posts(user: UserDocument) -> list[PostDocument]:
+    all_posts = []
+    user_posts = await PostDocument.find(PostDocument.author == user.username
+                                        ).to_list()
+    all_posts.extend(user_posts)
+    following_posts = await PostDocument.find(
+        In(PostDocument.author, user.following)).to_list()
+    all_posts.extend(following_posts)
+    return all_posts

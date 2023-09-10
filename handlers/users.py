@@ -4,8 +4,8 @@ import json
 import pydantic
 
 import utils
-from models.users import (User, UserDocument, UserUpdate, get_followers,
-                          get_following)
+from models.users import (User, UserDocument, UserUpdate, generate_user_dict,
+                          get_followers, get_following)
 from utils.logging import LOG_MANAGER
 
 logger = LOG_MANAGER.getLogger(__name__)
@@ -44,10 +44,8 @@ def create(event, context):
             }
 
         return {
-            "statusCode":
-                200,
-            "body":
-                User(**new_user.dict()).json(exclude={"password", "scopes"}),
+            "statusCode": 200,
+            "body": json.dumps({"token": utils.generate_token(new_user)}),
         }
 
     return asyncio.run(_create(event))
@@ -57,17 +55,28 @@ def index(event, context):
 
     async def _index():
         await utils.setup()
+        logger.info("Getting all users")
         users = await UserDocument.find_all(limit=100,
                                             sort=[("username", 1)]).to_list()
 
+        users = await asyncio.gather(
+            *[generate_user_dict(user) for user in users],)
+        print(f"Users: {users}")
         logger.info(f"Found {len(users)} users", extra={})
+
+        logger.info(
+            f"Users converted to dicts: {[User(**user).dict(exclude={'password', 'scopes'}) for user in users]}",
+            extra={})
         return {
             "statusCode":
                 200,
-            "users": [
-                User(**user.dict()).json(exclude={"password", "scopes"})
-                for user in users
-            ],
+            "body":
+                json.dumps({
+                    "users": [
+                        User(**user).dict(exclude={"password", "scopes"})
+                        for user in users
+                    ]
+                }),
         }
 
     return asyncio.run(_index())
@@ -104,7 +113,7 @@ def edit(event, context):
 
         return {
             "statusCode": 200,
-            "body": User(**user.dict()).json(exclude={"password", "scopes"}),
+            "body": User(**user.dict(exclude={'password'})).json(),
         }
 
     return asyncio.run(_edit(event))
@@ -129,14 +138,18 @@ def show(event, context):
             f"Getting followers for {username}",
             extra={},
         )
-        followers = await get_followers(username)
-        user.followers = followers
-        following = await get_following(username)
-        user.following = following
+        user_dict = await generate_user_dict(user)
+
+        logger.info(
+            f"Found {len(user_dict['followers'])} followers for {username}",
+            extra={},
+        )
+
+        logger.info(f"jsonable user: {User(**user_dict).json()}", extra={})
 
         return {
             "statusCode": 200,
-            "body": User(**user.dict()).json(exclude={"password", "scopes"}),
+            "body": User(**user_dict).json(),
         }
 
     return asyncio.run(_show(event))
@@ -184,18 +197,11 @@ def follow(event, context):
         follower.following.append(follow_user.username)
 
         await follower.save()
-
-        follow_user = {
-            **follow_user.dict(),
-            "followers":
-                await get_followers(follow_user.followers),
-            "following":
-                await get_following(follow_user.following),
-        }
+        user_dict = await generate_user_dict(follow_user)
 
         return {
             "statusCode": 200,
-            "body": User(**follow_user).json(exclude={"password", "scopes"}),
+            "body": User(**user_dict).json(),
         }
 
     return asyncio.run(_follow(event))
@@ -244,15 +250,11 @@ def unfollow(event, context):
 
         await follower.save()
 
-        follow_user = {
-            **follow_user.dict(),
-            "followers": await get_followers(username),
-            "following": await get_following(username),
-        }
+        user_dict = await generate_user_dict(follow_user)
 
         return {
             "statusCode": 200,
-            "body": User(**follow_user).json(exclude={"password", "scopes"}),
+            "body": User(**user_dict).json(),
         }
 
     return asyncio.run(_unfollow(event))

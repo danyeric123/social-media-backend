@@ -1,12 +1,18 @@
 import re
-from typing import Optional
+from typing import Any, Optional
 
 import pydantic
 from beanie import Indexed
+from beanie.odm.fields import PydanticObjectId
 from beanie.operators import In
 from pydantic.types import SecretStr
 
 from models import BaseDocument
+
+
+class UserOut(pydantic.BaseModel):
+    username: str
+    avatar: Optional[str]
 
 
 class UserIn(pydantic.BaseModel):
@@ -25,8 +31,14 @@ class User(pydantic.BaseModel):
     password: SecretStr
     scopes: list[str] = []
     avatar: Optional[str] = ""
-    followers: list["User"] = []
-    following: list["User"] = []
+    followers: Optional[list[UserOut]] = None
+    following: Optional[list[UserOut]] = None
+
+    class Config:
+        json_encoders = {
+            PydanticObjectId: str
+        }  # This line specifies how to serialize ObjectId
+        extra = "ignore"  # Ignore fields not defined in the model
 
     @pydantic.validator("avatar")
     def avatar_must_be_url(cls, v):
@@ -37,6 +49,17 @@ class User(pydantic.BaseModel):
         if "s3.amazonaws.com" not in v and not re.match(url_pattern, v):
             raise ValueError(f"Avatar must be a url. Received: {v}")
         return v
+
+    @pydantic.validator("username")
+    def username_must_be_valid(cls, v):
+        if not re.match(r"^[a-zA-Z0-9_]{3,20}$", v):
+            raise ValueError(
+                "Username must be between 3 and 20 characters and only contain alphanumeric characters and underscores"
+            )
+        return v
+
+    def json(self, *args, **kwargs):
+        return super().json(*args, **kwargs, exclude={"password", "scopes"})
 
 
 class UserDocument(User, BaseDocument):
@@ -51,16 +74,34 @@ class UserDocument(User, BaseDocument):
 
 
 async def get_followers(follower_ids: list[str]):
+    if not follower_ids:
+        return []
     followers = await UserDocument.find(In(UserDocument.username, follower_ids),
                                         limit=100).to_list()
     return followers
 
 
 async def get_following(following_ids: list[str]):
+    if not following_ids:
+        return []
     following = await UserDocument.find(In(UserDocument.username,
                                            following_ids),
                                         limit=100).to_list()
     return following
+
+
+async def generate_user_dict(user: UserDocument) -> dict[str, Any]:
+    return {
+        **user.dict(),
+        "followers": [
+            UserOut(**user.dict()).dict()
+            for user in await get_followers(user.followers)
+        ],
+        "following": [
+            UserUpdate(**user.dict()).dict()
+            for user in await get_following(user.following)
+        ],
+    }
 
 
 async def find_user(username: str) -> UserDocument:

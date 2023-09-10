@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta, timezone
+
 import jwt
 from beanie import init_beanie
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -28,8 +30,20 @@ def get_current_user(event: dict, context) -> str:
 
     logger.info(
         f"Grabbing user from token: {event['headers']['authorization-token']}",
-        extra={},
+        extra={"handler": context.function_name},
     )
     header = event["headers"]["authorization-token"]
     payload = jwt.decode(header, get_secret(), algorithms=["HS256"])
     return payload["username"]
+
+
+def generate_token(user: UserDocument) -> str:
+    payload = {
+        "username": user.username,
+        "scope": user.scopes,
+        "exp": datetime.now(tz=timezone.utc) + timedelta(days=1)
+    }
+
+    token = jwt.encode(payload=payload, key=get_secret())
+
+    return token

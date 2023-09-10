@@ -1,8 +1,10 @@
 import asyncio
 import json
+from datetime import datetime
 
 import jwt
 import pydantic
+from ulid import ULID
 
 import utils
 from models.posts import Post, PostDocument, Reply, get_recent_posts
@@ -10,6 +12,12 @@ from models.users import UserDocument
 from utils.logging import LOG_MANAGER
 
 logger = LOG_MANAGER.getLogger(__name__)
+
+
+def serialize_datetime(obj):
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    raise TypeError(f"Type {type(obj)} not serializable")
 
 
 def index(event, context):
@@ -31,10 +39,14 @@ def index(event, context):
         if not user:
             return {"statusCode": 404, "body": "User not found"}
 
-        posts = get_recent_posts(user.following)
+        posts = await get_recent_posts(user)
         return {
-            "statusCode": 200,
-            "body": [Post(**post.dict()).json() for post in posts],
+            "statusCode":
+                200,
+            "body":
+                json.dumps(
+                    {"posts": [Post(**post.dict()).dict() for post in posts]},
+                    default=serialize_datetime),
         }
 
     return asyncio.run(_index(username))
@@ -60,9 +72,11 @@ def create(event, context):
             return {"statusCode": 400, "body": json.dumps("No body was passed")}
 
         try:
-            new_post = PostDocument(**body, author=username)
+            new_post = PostDocument(**body, author=username, ulid=str(ULID()))
             await new_post.save()
         except pydantic.ValidationError as e:
+            logger.error(f"{new_post} caused a validation error: {e.errors()}",
+                         extra={})
             return {
                 "statusCode": 400,
                 "body": json.dumps({"reason": e.errors()})
@@ -77,9 +91,10 @@ def get(event, context):
 
     async def _get(event):
         await utils.setup()
+        logger.info(f"Getting post {event['pathParameters']['id']}", extra={})
         try:
-            post = await PostDocument.find_one(
-                PostDocument.id == event["pathParameters"]["id"])
+            _id = event["pathParameters"]["id"]
+            post = await PostDocument.find_one(PostDocument.ulid == _id)
         except KeyError:
             return {
                 "statusCode":
@@ -124,7 +139,7 @@ def like(event, context):
 
         post_id = event["pathParameters"]["id"]
 
-        post = await PostDocument.find_one(PostDocument.id == post_id)
+        post = await PostDocument.find_one(PostDocument.ulid == post_id)
         if not post:
             return {"statusCode": 404, "body": "Post not found"}
 
@@ -155,7 +170,7 @@ def unlike(event, context):
 
         post_id = event["pathParameters"]["id"]
 
-        post = await PostDocument.find_one(PostDocument.id == post_id)
+        post = await PostDocument.find_one(PostDocument.ulid == post_id)
         if not post:
             return {"statusCode": 404, "body": "Post not found"}
 
@@ -186,17 +201,24 @@ def comment(event, context):
 
         post_id = event["pathParameters"]["id"]
 
-        post = await PostDocument.find_one(PostDocument.id == post_id)
+        post = await PostDocument.find_one(PostDocument.ulid == post_id)
         if not post:
             return {"statusCode": 404, "body": "Post not found"}
 
         try:
-            reply = Reply.parse_obj(json.loads(event["body"]))
+            reply = Reply(**json.loads(event["body"]),
+                          author=username,
+                          ulid=str(ULID()))
         except KeyError:
             return {"statusCode": 400, "body": "No body was passed"}
+        except pydantic.ValidationError as e:
+            return {
+                "statusCode": 400,
+                "body": json.dumps({"reason": e.errors()})
+            }
 
         post.replies.append(reply)
         await post.save()
-        return {"statusCode": 200}
+        return {"statusCode": 200, "body": reply.json()}
 
     return asyncio.run(_comment(event))

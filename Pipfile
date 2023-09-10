@@ -12,6 +12,7 @@ neomodel = "*"
 python-decouple = "*"
 neo4j-driver = "*"
 newrelic = "*"
+python-ulid = "*"
 
 [dev-packages]
 flake8 = "*"
