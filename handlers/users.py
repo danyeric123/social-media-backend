@@ -4,8 +4,9 @@ import json
 import pydantic
 
 import utils
-from models.users import (User, UserDocument, UserUpdate, generate_user_dict,
-                          get_followers, get_following)
+from models import serialize_datetime
+from models.posts import Post, PostDocument
+from models.users import User, UserDocument, UserUpdate, generate_user_dict
 from utils.logging import LOG_MANAGER
 
 logger = LOG_MANAGER.getLogger(__name__)
@@ -95,12 +96,15 @@ def edit(event, context):
 
         try:
             user = UserUpdate.parse_obj(body)
-            await UserDocument.find_one(UserDocument.username == username
-                                       ).update(**user.dict(exclude_none=True))
+            user_doc = await UserDocument.find_one(
+                UserDocument.username == username)
             logger.info(
                 f"Updated user {username} with {body}",
                 extra={},
             )
+            for field, value in user.dict(exclude_unset=True):
+                setattr(user_doc, field, value)
+            await user_doc.save()
         except pydantic.ValidationError as e:
             logger.error(
                 f"Failed to update user {username}: {e}",
@@ -140,16 +144,24 @@ def show(event, context):
         )
         user_dict = await generate_user_dict(user)
 
-        logger.info(
-            f"Found {len(user_dict['followers'])} followers for {username}",
-            extra={},
-        )
+        posts = await PostDocument.find(PostDocument.author == username,
+                                        limit=100).to_list()
 
-        logger.info(f"jsonable user: {User(**user_dict).json()}", extra={})
+        posts = [Post(**post.dict()).dict() for post in posts]
 
         return {
-            "statusCode": 200,
-            "body": User(**user_dict).json(),
+            "statusCode":
+                200,
+            "body":
+                json.dumps(
+                    {
+                        "user":
+                            User(**user_dict
+                                ).dict(exclude={"password", "scopes"}),
+                        "posts":
+                            posts
+                    },
+                    default=serialize_datetime),
         }
 
     return asyncio.run(_show(event))

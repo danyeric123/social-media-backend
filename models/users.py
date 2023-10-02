@@ -14,32 +14,6 @@ class UserOut(pydantic.BaseModel):
     username: str
     avatar: Optional[str]
 
-
-class UserIn(pydantic.BaseModel):
-    username: str
-    password: SecretStr
-
-
-class UserUpdate(pydantic.BaseModel):
-    username: Optional[str]
-    password: Optional[SecretStr]
-    avatar: Optional[str]
-
-
-class User(pydantic.BaseModel):
-    username: str
-    password: SecretStr
-    scopes: list[str] = []
-    avatar: Optional[str] = ""
-    followers: Optional[list[UserOut]] = None
-    following: Optional[list[UserOut]] = None
-
-    class Config:
-        json_encoders = {
-            PydanticObjectId: str
-        }  # This line specifies how to serialize ObjectId
-        extra = "ignore"  # Ignore fields not defined in the model
-
     @pydantic.validator("avatar")
     def avatar_must_be_url(cls, v):
         if not v:
@@ -57,6 +31,30 @@ class User(pydantic.BaseModel):
                 "Username must be between 3 and 20 characters and only contain alphanumeric characters and underscores"
             )
         return v
+
+
+class UserIn(pydantic.BaseModel):
+    username: str
+    password: SecretStr
+
+
+class UserUpdate(pydantic.BaseModel):
+    username: Optional[str]
+    password: Optional[SecretStr]
+    avatar: Optional[str]
+
+
+class User(UserOut):
+    password: SecretStr
+    scopes: list[str] = []
+    followers: Optional[list["UserOut"]] = None
+    following: Optional[list["UserOut"]] = None
+
+    class Config:
+        json_encoders = {
+            PydanticObjectId: str
+        }  # This line specifies how to serialize ObjectId
+        extra = "ignore"  # Ignore fields not defined in the model
 
     def json(self, *args, **kwargs):
         return super().json(*args, **kwargs, exclude={"password", "scopes"})
@@ -98,7 +96,7 @@ async def generate_user_dict(user: UserDocument) -> dict[str, Any]:
             for user in await get_followers(user.followers)
         ],
         "following": [
-            UserUpdate(**user.dict()).dict()
+            UserOut(**user.dict()).dict()
             for user in await get_following(user.following)
         ],
     }

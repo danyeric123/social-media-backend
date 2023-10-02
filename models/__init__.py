@@ -39,3 +39,9 @@ class Response(BaseModel):
         if isinstance(v, dict):
             return json.dumps(v)
         raise ValueError("Body must be a string or a BaseModel")
+
+
+def serialize_datetime(obj):
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    raise TypeError(f"Type {type(obj)} not serializable")

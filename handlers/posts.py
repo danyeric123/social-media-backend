@@ -7,17 +7,12 @@ import pydantic
 from ulid import ULID
 
 import utils
+from models import serialize_datetime
 from models.posts import Post, PostDocument, Reply, get_recent_posts
 from models.users import UserDocument
 from utils.logging import LOG_MANAGER
 
 logger = LOG_MANAGER.getLogger(__name__)
-
-
-def serialize_datetime(obj):
-    if isinstance(obj, datetime):
-        return obj.isoformat()
-    raise TypeError(f"Type {type(obj)} not serializable")
 
 
 def index(event, context):
@@ -113,8 +108,59 @@ def get(event, context):
 
 
 def edit(event, context):
-    asyncio.run(utils.setup())
-    return {"statusCode": 200, "body": "Hello, World!"}
+
+    async def _edit(event):
+        try:
+            username = utils.get_current_user(event, context)
+        except KeyError:
+            return {
+                "statusCode": 403,
+                "body": "Unauthorized: No token was passed"
+            }
+        except jwt.exceptions.InvalidSignatureError:
+            return {"statusCode": 403, "body": "Unauthorized: Invalid token"}
+
+        await utils.setup()
+        try:
+            body = json.loads(event["body"])
+        except KeyError:
+            return {"statusCode": 400, "body": json.dumps("No body was passed")}
+
+        try:
+            post_ulid = event["pathParameters"]["id"]
+        except KeyError:
+            return {
+                "statusCode":
+                    400,
+                "body":
+                    json.dumps(
+                        {"message": "Path parameter 'id' was not passed"})
+            }
+
+        logger.info(f"Editing post {post_ulid} with {body}", extra={})
+
+        try:
+            post = await PostDocument.find_one(PostDocument.ulid == post_ulid)
+            if not post:
+                return {"statusCode": 404, "body": "Post not found"}
+            if post.author != username:
+                return {"statusCode": 403, "body": "Unauthorized"}
+
+            for field, value in body.items():
+                setattr(post, field, value)
+
+            await post.save()
+        except pydantic.ValidationError as e:
+            logger.error(f"{post} caused a validation error: {e.errors()}",
+                         extra={})
+            return {
+                "statusCode": 400,
+                "body": json.dumps({"reason": e.errors()})
+            }
+
+        return {"statusCode": 200, "body": Post(**post.dict()).json()}
+
+    return asyncio.run(_edit(event))
 
 
 def delete(event, context):
