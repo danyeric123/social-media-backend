@@ -199,6 +199,80 @@ def like(event, context):
     return asyncio.run(_like(event))
 
 
+def comment_like(event, context):
+
+    async def _comment_like(event):
+        try:
+            username = utils.get_current_user(event, context)
+        except KeyError:
+            return {
+                "statusCode": 403,
+                "body": "Unauthorized: No token was passed"
+            }
+        except jwt.exceptions.InvalidSignatureError:
+            return {"statusCode": 403, "body": "Unauthorized: Invalid token"}
+
+        await utils.setup()
+
+        post_id = event["pathParameters"]["id"]
+        comment_id = event["pathParameters"]["comment_id"]
+
+        post = await PostDocument.find_one(PostDocument.ulid == post_id)
+        if not post:
+            return {"statusCode": 404, "body": "Post not found"}
+
+        comment = next(
+            filter(lambda reply: reply.ulid == comment_id, post.replies), None)
+        if not comment:
+            return {"statusCode": 404, "body": "Comment not found"}
+
+        if username in comment.likes:
+            return {"statusCode": 200}
+
+        comment.likes.append(username)
+        await post.save()
+        return {"statusCode": 200}
+
+    return asyncio.run(_comment_like(event))
+
+
+def comment_unlike(event, context):
+
+    async def _comment_unlike(event):
+        try:
+            username = utils.get_current_user(event, context)
+        except KeyError:
+            return {
+                "statusCode": 403,
+                "body": "Unauthorized: No token was passed"
+            }
+        except jwt.exceptions.InvalidSignatureError:
+            return {"statusCode": 403, "body": "Unauthorized: Invalid token"}
+
+        await utils.setup()
+
+        post_id = event["pathParameters"]["id"]
+        comment_id = event["pathParameters"]["comment_id"]
+
+        post = await PostDocument.find_one(PostDocument.ulid == post_id)
+        if not post:
+            return {"statusCode": 404, "body": "Post not found"}
+
+        comment = next(
+            filter(lambda reply: reply.ulid == comment_id, post.replies), None)
+        if not comment:
+            return {"statusCode": 404, "body": "Comment not found"}
+
+        if username not in comment.likes:
+            return {"statusCode": 200}
+
+        comment.likes.remove(username)
+        await post.save()
+        return {"statusCode": 200}
+
+    return asyncio.run(_comment_unlike(event))
+
+
 def unlike(event, context):
 
     async def _unlike(event):
@@ -252,6 +326,7 @@ def comment(event, context):
             return {"statusCode": 404, "body": "Post not found"}
 
         try:
+            # If the body contains the parent_ulid, it's a reply
             reply = Reply(**json.loads(event["body"]),
                           author=username,
                           ulid=str(ULID()))

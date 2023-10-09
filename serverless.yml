@@ -108,10 +108,19 @@ functions:
             name: customAuthorizer
   
   commentLike:
-    handler: handlers.posts.commentLike
+    handler: handlers.posts.comment_like
     events:
       - httpApi:
-          path: /comment/{commentId}/like
+          path: /posts/{id}/comment/{commentId}/like
+          method: post
+          authorizer: 
+            name: customAuthorizer
+  
+  commentUnlike:
+    handler: handlers.posts.comment_unlike
+    events:
+      - httpApi:
+          path: /posts/{id}/comment/{commentId}/unlike
           method: post
           authorizer: 
             name: customAuthorizer
