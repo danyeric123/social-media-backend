@@ -15,7 +15,7 @@ class Reply(BaseModel):
     created_at: datetime = datetime.now()
     updated_at: datetime = datetime.now()
     likes: list[str] = []
-    parent_ulid: str
+    # parent_ulid: str
 
     @validator("ulid")
     def ulid_must_be_valid(cls, v):

@@ -125,6 +125,15 @@ functions:
           authorizer: 
             name: customAuthorizer
 
+  commentDelete:
+    handler: handlers.posts.comment_delete
+    events:
+      - httpApi:
+          path: /posts/{id}/comment/{commentId}
+          method: delete
+          authorizer: 
+            name: customAuthorizer
+
   usersCreate:
     handler: handlers.users.create
     events:

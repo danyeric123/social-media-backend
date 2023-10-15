@@ -34,6 +34,24 @@ def index(event, context):
         if not user:
             return {"statusCode": 404, "body": "User not found"}
 
+        if "queryStringParameters" in event and event[
+                "queryStringParameters"] and "category" in event[
+                    "queryStringParameters"]:
+            posts = await PostDocument.find(
+                PostDocument.categories == event["queryStringParameters"]
+                ["category"]).to_list()
+            return {
+                "statusCode":
+                    200,
+                "body":
+                    json.dumps(
+                        {
+                            "posts":
+                                [Post(**post.dict()).dict() for post in posts]
+                        },
+                        default=serialize_datetime),
+            }
+
         posts = await get_recent_posts(user)
         return {
             "statusCode":
@@ -164,8 +182,51 @@ def edit(event, context):
 
 
 def delete(event, context):
-    asyncio.run(utils.setup())
-    return {"statusCode": 200, "body": "Hello, World!"}
+
+    async def _delete(event):
+        try:
+            username = utils.get_current_user(event, context)
+        except KeyError:
+            return {
+                "statusCode": 403,
+                "body": "Unauthorized: No token was passed"
+            }
+        except jwt.exceptions.InvalidSignatureError:
+            return {"statusCode": 403, "body": "Unauthorized: Invalid token"}
+
+        await utils.setup()
+        try:
+            post_ulid = event["pathParameters"]["id"]
+        except KeyError:
+            return {
+                "statusCode":
+                    400,
+                "body":
+                    json.dumps(
+                        {"message": "Path parameter 'id' was not passed"})
+            }
+
+        logger.info(f"Deleting post {post_ulid}", extra={})
+
+        try:
+            post = await PostDocument.find_one(PostDocument.ulid == post_ulid)
+            if not post:
+                return {"statusCode": 404, "body": "Post not found"}
+            if post.author != username:
+                return {"statusCode": 403, "body": "Unauthorized"}
+
+            await post.delete()
+        except pydantic.ValidationError as e:
+            logger.error(f"{post} caused a validation error: {e.errors()}",
+                         extra={})
+            return {
+                "statusCode": 400,
+                "body": json.dumps({"reason": e.errors()})
+            }
+
+        return {"statusCode": 200, "body": Post(**post.dict()).json()}
+
+    return asyncio.run(_delete(event))
 
 
 def like(event, context):
@@ -343,3 +404,39 @@ def comment(event, context):
         return {"statusCode": 200, "body": reply.json()}
 
     return asyncio.run(_comment(event))
+
+def comment_delete(event, context):
+    
+        async def _comment_delete(event):
+            try:
+                username = utils.get_current_user(event, context)
+            except KeyError:
+                return {
+                    "statusCode": 403,
+                    "body": "Unauthorized: No token was passed"
+                }
+            except jwt.exceptions.InvalidSignatureError:
+                return {"statusCode": 403, "body": "Unauthorized: Invalid token"}
+    
+            await utils.setup()
+    
+            post_id = event["pathParameters"]["id"]
+            comment_id = event["pathParameters"]["commentId"]
+    
+            post = await PostDocument.find_one(PostDocument.ulid == post_id)
+            if not post:
+                return {"statusCode": 404, "body": "Post not found"}
+    
+            comment = next(
+                filter(lambda reply: reply.ulid == comment_id, post.replies), None)
+            if not comment:
+                return {"statusCode": 404, "body": "Comment not found"}
+    
+            if comment.author != username:
+                return {"statusCode": 403, "body": "Unauthorized"}
+    
+            post.replies.remove(comment)
+            await post.save()
+            return {"statusCode": 200}
+    
+        return asyncio.run(_comment_delete(event))
