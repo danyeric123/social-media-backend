@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 
 from beanie.operators import In
 from pydantic import BaseModel, validator
@@ -8,14 +9,13 @@ from models import BaseDocument
 from models.users import UserDocument
 
 
-class Reply(BaseModel):
+class ReplyBase(BaseModel):
     ulid: str
     author: str
     content: str
     created_at: datetime = datetime.now()
     updated_at: datetime = datetime.now()
     likes: list[str] = []
-    # parent_ulid: str
 
     @validator("ulid")
     def ulid_must_be_valid(cls, v):
@@ -26,6 +26,14 @@ class Reply(BaseModel):
             except ValueError:
                 raise ValueError("ULID must be a valid ULID string")
         raise ValueError("ULID must be a string or a ULID object")
+
+
+class ReplyDocument(ReplyBase):
+    parent_ulid: Optional[str] = ""
+
+
+class Reply(ReplyBase):
+    replies: list["Reply"] = []
 
 
 class Post(BaseModel):
@@ -51,6 +59,7 @@ class Post(BaseModel):
 
 
 class PostDocument(BaseDocument, Post):
+    replies: list[ReplyDocument] = []
 
     class Settings:
         name = "posts"
@@ -66,3 +75,15 @@ async def get_recent_posts(user: UserDocument) -> list[PostDocument]:
         In(PostDocument.author, user.following)).to_list()
     all_posts.extend(following_posts)
     return all_posts
+
+
+def make_replies_tree(replies: list[ReplyDocument],
+                      parent_ulid: str = "") -> list[Reply]:
+    tree = []
+    for reply in replies:
+        if reply.parent_ulid == parent_ulid:
+            tree.append(
+                Reply(**reply.dict(),
+                      replies=make_replies_tree(replies, reply.ulid)))
+    print(tree)
+    return tree

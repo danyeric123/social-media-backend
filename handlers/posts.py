@@ -8,7 +8,8 @@ from ulid import ULID
 
 import utils
 from models import serialize_datetime
-from models.posts import Post, PostDocument, Reply, get_recent_posts
+from models.posts import (Post, PostDocument, ReplyDocument, get_recent_posts,
+                          make_replies_tree)
 from models.users import UserDocument
 from utils.logging import LOG_MANAGER
 
@@ -34,9 +35,9 @@ def index(event, context):
         if not user:
             return {"statusCode": 404, "body": "User not found"}
 
-        if "queryStringParameters" in event and event[
-                "queryStringParameters"] and "category" in event[
-                    "queryStringParameters"]:
+        if ("queryStringParameters" in event and
+                event["queryStringParameters"] and
+                "category" in event["queryStringParameters"]):
             posts = await PostDocument.find(
                 PostDocument.categories == event["queryStringParameters"]
                 ["category"]).to_list()
@@ -46,10 +47,14 @@ def index(event, context):
                 "body":
                     json.dumps(
                         {
-                            "posts":
-                                [Post(**post.dict()).dict() for post in posts]
+                            "posts": [
+                                Post(**post.dict(exclude={"replies"}),
+                                     replies=make_replies_tree(
+                                         post.replies)).dict() for post in posts
+                            ]
                         },
-                        default=serialize_datetime),
+                        default=serialize_datetime,
+                    ),
             }
 
         posts = await get_recent_posts(user)
@@ -58,8 +63,15 @@ def index(event, context):
                 200,
             "body":
                 json.dumps(
-                    {"posts": [Post(**post.dict()).dict() for post in posts]},
-                    default=serialize_datetime),
+                    {
+                        "posts": [
+                            Post(**post.dict(exclude={"replies"}),
+                                 replies=make_replies_tree(
+                                     post.replies)).dict() for post in posts
+                        ]
+                    },
+                    default=serialize_datetime,
+                ),
         }
 
     return asyncio.run(_index(username))
@@ -120,7 +132,13 @@ def get(event, context):
         if not post:
             return {"statusCode": 404, "body": "Post not found"}
 
-        return {"statusCode": 200, "body": Post(**post.dict()).json()}
+        return {
+            "statusCode":
+                200,
+            "body":
+                Post(**post.dict(exclude={"replies"}),
+                     replies=make_replies_tree(post.replies)).json()
+        }
 
     return asyncio.run(_get(event))
 
@@ -152,7 +170,7 @@ def edit(event, context):
                     400,
                 "body":
                     json.dumps(
-                        {"message": "Path parameter 'id' was not passed"})
+                        {"message": "Path parameter 'id' was not passed"}),
             }
 
         logger.info(f"Editing post {post_ulid} with {body}", extra={})
@@ -176,7 +194,13 @@ def edit(event, context):
                 "body": json.dumps({"reason": e.errors()})
             }
 
-        return {"statusCode": 200, "body": Post(**post.dict()).json()}
+        return {
+            "statusCode":
+                200,
+            "body":
+                Post(**post.dict(exclude={"replies"}),
+                     replies=make_replies_tree(post.replies)).json()
+        }
 
     return asyncio.run(_edit(event))
 
@@ -203,7 +227,7 @@ def delete(event, context):
                     400,
                 "body":
                     json.dumps(
-                        {"message": "Path parameter 'id' was not passed"})
+                        {"message": "Path parameter 'id' was not passed"}),
             }
 
         logger.info(f"Deleting post {post_ulid}", extra={})
@@ -385,12 +409,14 @@ def comment(event, context):
         post = await PostDocument.find_one(PostDocument.ulid == post_id)
         if not post:
             return {"statusCode": 404, "body": "Post not found"}
+        
 
         try:
+            logger.info(f"Commenting on post {post_id}: {event['body']}", extra={})
             # If the body contains the parent_ulid, it's a reply
-            reply = Reply(**json.loads(event["body"]),
-                          author=username,
-                          ulid=str(ULID()))
+            reply = ReplyDocument(**json.loads(event["body"]),
+                              author=username,
+                              ulid=str(ULID()))
         except KeyError:
             return {"statusCode": 400, "body": "No body was passed"}
         except pydantic.ValidationError as e:
@@ -405,38 +431,39 @@ def comment(event, context):
 
     return asyncio.run(_comment(event))
 
+
 def comment_delete(event, context):
-    
-        async def _comment_delete(event):
-            try:
-                username = utils.get_current_user(event, context)
-            except KeyError:
-                return {
-                    "statusCode": 403,
-                    "body": "Unauthorized: No token was passed"
-                }
-            except jwt.exceptions.InvalidSignatureError:
-                return {"statusCode": 403, "body": "Unauthorized: Invalid token"}
-    
-            await utils.setup()
-    
-            post_id = event["pathParameters"]["id"]
-            comment_id = event["pathParameters"]["commentId"]
-    
-            post = await PostDocument.find_one(PostDocument.ulid == post_id)
-            if not post:
-                return {"statusCode": 404, "body": "Post not found"}
-    
-            comment = next(
-                filter(lambda reply: reply.ulid == comment_id, post.replies), None)
-            if not comment:
-                return {"statusCode": 404, "body": "Comment not found"}
-    
-            if comment.author != username:
-                return {"statusCode": 403, "body": "Unauthorized"}
-    
-            post.replies.remove(comment)
-            await post.save()
-            return {"statusCode": 200}
-    
-        return asyncio.run(_comment_delete(event))
+
+    async def _comment_delete(event):
+        try:
+            username = utils.get_current_user(event, context)
+        except KeyError:
+            return {
+                "statusCode": 403,
+                "body": "Unauthorized: No token was passed"
+            }
+        except jwt.exceptions.InvalidSignatureError:
+            return {"statusCode": 403, "body": "Unauthorized: Invalid token"}
+
+        await utils.setup()
+
+        post_id = event["pathParameters"]["id"]
+        comment_id = event["pathParameters"]["commentId"]
+
+        post = await PostDocument.find_one(PostDocument.ulid == post_id)
+        if not post:
+            return {"statusCode": 404, "body": "Post not found"}
+
+        comment = next(
+            filter(lambda reply: reply.ulid == comment_id, post.replies), None)
+        if not comment:
+            return {"statusCode": 404, "body": "Comment not found"}
+
+        if comment.author != username:
+            return {"statusCode": 403, "body": "Unauthorized"}
+
+        post.replies.remove(comment)
+        await post.save()
+        return {"statusCode": 200}
+
+    return asyncio.run(_comment_delete(event))
